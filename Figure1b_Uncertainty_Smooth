@@ -1,0 +1,283 @@
+% This script takes the peridogram estimate. Plots an uncertainty limit
+% envelope for the estimate and then overlays a smoothed estimate
+
+% Also plots the uncertainty window for this smoothed estimate 
+
+
+
+
+clear all
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% load in the data
+
+% load in un-smoothed NTK PSD in period
+load TA.O18A..BHZ.2008-08-14T12:00:00.000000.3600.period_CSD_Seg5.txt
+NTK_Decon = TA_O18A__BHZ_2008_08_14T12_00_00_000000_3600_period_CSD_Seg5;
+
+% Initial NTK data
+load TA.O18A.--.BHZpsd.dat
+NTK_Z = TA_O18A____BHZpsd(1:96,7:8);
+
+% Keith Koper
+
+load 2008.08.14.12.eig.out
+Keith = X2008_08_14_12_eig;
+
+
+% Mustang 
+load Mustang_O18A_BHZ_2008_08_14_12.dat
+Must_Z = Mustang_O18A_BHZ_2008_08_14_12;
+
+
+
+% User specified paramaters for binning 
+
+
+reference_freq = 1.0; 
+Octave_bin = 1/100;
+Octave_bin_MUST = 1;
+
+max_per = 1000;
+% This is just nyquist 
+max_freq = 20; 
+Power_Base = 10;
+Power_Base_MUST = 1;
+
+
+
+
+
+% User specified intervals for confidence intervals 
+
+% Degrees of Freedom of Modified Welch's Method Estimate 
+DOF = 8.8;
+
+% Confidence Internval (value is between 0-1)
+
+CI = 0.95;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% setup the bins %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% number of bins in increasing frequency 
+
+N_fbins = floor(log10(max_freq/reference_freq)/Octave_bin);
+
+reference_period = 1/reference_freq;
+N_pbins = floor(log10(max_per/reference_period)/Octave_bin);
+
+
+% Mustang Bins %%%%%%%
+
+
+
+
+% Define bin centers 
+
+BC_f = [];
+BC_P = [];
+
+
+for ii = 0:N_pbins
+    BC_P(ii+1) = reference_period * Power_Base^(ii*Octave_bin);
+end
+
+for ii = 1:N_fbins
+    BC_f(ii) = reference_freq*Power_Base^(ii*Octave_bin);
+end
+
+% put everthing in period
+
+BC_f = fliplr(1./BC_f);
+BC = [BC_f, BC_P]; 
+
+
+% Make the Period bin cutoffs 
+
+BC_E = BC*Power_Base^(Octave_bin/2); 
+BC_E = [1/max_freq,BC_E];
+
+PSD_Power = NTK_Decon(:,2);
+
+[N,Edge2,bins] = histcounts(NTK_Decon(:,1),BC_E);
+
+% Average into bins and compute confidence intervals
+
+
+% Now get the uncertainty estimates for the modified welch method
+
+alpha_DOF = 1-CI;
+
+
+for kk = 1:length(BC)
+    if N(kk) >= 1
+        power_mean(kk) = nanmean(PSD_Power(bins==kk));
+        
+        % Convert to power
+        
+        power_mean_p(kk) = 10.^(power_mean(kk)./10);
+        
+        % Compute New Degrees of Freedom
+        
+        DOF_S(kk) = DOF*N(kk);
+        
+        % Compute upper lower limits of the smoothed spectra
+        
+        Smooth_Up_pwr(kk) = power_mean_p(kk)*DOF_S(kk)/(chi2inv(alpha_DOF/2,DOF_S(kk)));
+        Smooth_Lo_pwr(kk) = power_mean_p(kk)*DOF_S(kk)/(chi2inv(1-(alpha_DOF/2),DOF_S(kk)));
+
+        % convert back to dB 
+
+        Smooth_Up(kk) = 10.*log10(Smooth_Up_pwr(kk));
+        Smooth_Lo(kk) = 10.*log10(Smooth_Lo_pwr(kk));
+
+        
+    else
+        power_mean(kk) = NaN;
+        Smooth_Lo(kk) = NaN;
+        Smooth_Up(kk) = NaN;
+    end
+end
+
+% Compute the confidence intervals for the smoothed PSD
+
+
+
+% Remove the Unsmoothed NaNs 
+
+index_Nan = find(isnan(power_mean) == 1);
+
+BC_NN = BC;
+
+BC_NN(index_Nan) = [];
+power_mean(index_Nan) = [];
+Smooth_Up(index_Nan) = [];
+Smooth_Lo(index_Nan) = [];
+
+
+index_Nan2 = find(NTK_Z(:,2) < -200);
+
+NTK_Z(index_Nan2,:) = [];
+
+
+
+
+% Convert everything back from dB to a power
+
+NTK_Decon_pwr = 10.^(NTK_Decon(:,2)./10);
+
+Welch_Up_pwr = NTK_Decon_pwr*DOF/(chi2inv(alpha_DOF/2,DOF));
+Welch_Lo_pwr = NTK_Decon_pwr*DOF/(chi2inv(1-(alpha_DOF/2),DOF));
+
+% convert back to dB 
+
+Welch_Up = 10.*log10(Welch_Up_pwr);
+Welch_Lo = 10.*log10(Welch_Lo_pwr);
+
+
+%% Make the figure %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Hz_lines = [15,10,5,3,1,0.5,0.2,0.1,0.05,0.01,0.005,0.001];
+
+%ticks = (1./Hz_lines);
+%HZ_label = (1./ticks);
+
+%Make the Peterson curves
+fs=250;
+dlP=.05;
+PSDTOL=15;
+[LNMA,HNMA,lpd1,lpd2]=peterson_acc(dlP,fs);
+
+%Smoothed Peterson curves for plotting
+NMplotind=(0.001:dlP:10);
+LNMAp=spline(lpd1,LNMA,NMplotind);
+HNMAp=spline(lpd2,HNMA,NMplotind);
+
+pd1 = 10.^(lpd1);
+pd2 = 10.^(lpd2);
+
+figure(3);clf 
+
+
+
+
+
+Welch_Diff = Welch_Lo-Welch_Up;
+
+X = NTK_Decon(:,1);
+%Y = [Welch_Up, Welch_Lo, -200*ones(length(NTK_Decon(:,1)),1)];
+
+Y = [Welch_Up, Welch_Diff];
+
+
+
+
+a = area(X,Y)
+set (gca, 'Xscale', 'log')
+%alpha(0.3)
+
+a(1).FaceColor = 'w';
+a(1).HandleVisibility = 'off';
+a(2).FaceColor = [0.7 0.7 0.7];
+%a(3).FaceColor = 'w';
+
+%a2 = area(X,Y2);
+
+%a2(1).FaceColor = 'w'
+
+
+hold on
+
+
+
+
+
+H2 = semilogx(NTK_Decon(:,1), Welch_Up, 'color', [0.7 0.7 0.7], 'HandleVisibility','off');
+H7 = semilogx(BC_NN,power_mean,'r','LineWidth',3);
+H8 = semilogx(BC_NN,Smooth_Up,'k','LineWidth', 2);
+H1 = semilogx(1./Must_Z(:,1),Must_Z(:,2),'b','LineWidth',3);
+
+H3 = semilogx(pd1,LNMA,'k:');
+H4 = semilogx(pd2,HNMA,'k:');
+
+
+H6 = semilogx(NTK_Decon(:,1), Welch_Lo, 'color',[0.7 0.7 0.7]);
+
+H7 = semilogx(BC_NN,power_mean,'r');
+H8 = semilogx(BC_NN,Smooth_Up,'k');
+H9 = semilogx(BC_NN,Smooth_Lo,'k');
+
+H1 = semilogx(1./Must_Z(:,1),Must_Z(:,2),'b');
+
+
+
+
+set(H1, 'LineWidth',3.0)
+set(H4,'LineWidth',3.0);
+set(H3,'LineWidth',3.0)
+set(H7,'LineWidth',3.0);
+set(H2,'LineWidth',1.0);
+set(H6,'LineWidth',1.0);
+
+set(H8,'LineWidth',2.0);
+set(H9,'LineWidth',2.0);
+
+
+
+
+set(gca,'FontSize',30)
+xlim([0.05 500])
+ylim([-200 -90])
+set(gca,'ydir','normal')
+
+
+xlabel('Period (s)')
+ylabel('dB (rel. 1 (m/s^2)^2/Hz)')
+
+
+%set(gca,'xtick',ticks)
+%set(gca,'Xticklabel',HZ_label)
+%set(gca,'xdir','reverse')
+set(gca,'Layer','top')
+legend('ObsPY CSD 95% Confidence', '1/100th Decade binned PSD', '1/100th Decade 95% Confidence', 'MUSTANG PSD', 'NHNM/NLNM')

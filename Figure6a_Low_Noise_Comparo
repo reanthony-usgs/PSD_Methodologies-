@@ -1,0 +1,72 @@
+% Low Noise Model Comparison between Peterson, Berger, and data generated
+% from Berger
+
+clear all
+
+% load Berger Noise model (period, amplitude)
+
+load Berger_Noise_Model.mat
+
+% Load Peterson Curves for plotting 
+
+%Make the Peterson curves
+fs=250;
+dlP=.05;
+PSDTOL=15;
+[LNMA,HNMA,lpd1,lpd2]=peterson_acc(dlP,fs);
+
+%Smoothed Peterson curves for plotting
+NMplotind=(0.001:dlP:10);
+LNMAp=spline(lpd1,LNMA,NMplotind);
+HNMAp=spline(lpd2,HNMA,NMplotind);
+
+pd1 = 10.^(lpd1);
+pd2 = 10.^(lpd2);
+
+figure(1002);clf 
+H1 = semilogx(Berger(:,1),Berger(:,2), 'k-');
+hold on
+
+H3 = semilogx(pd1,LNMA,'k:');
+
+set(gca,'FontSize',30)
+xlim([0.1 200])
+ylim([-200 -90])
+set(gca,'ydir','normal')
+
+set(H1,'LineWidth',3.0);
+set(H3,'LineWidth',3.0);
+
+
+%set(gca,'xtick',ticks)
+%set(gca,'Xticklabel',HZ_label)
+%set(gca,'xdir','reverse')
+%legend('Welchs Method', 'IRIS MUSTANG', 'Koper and Burlacu (2015)', 'NHNM/NLNM')
+
+xlabel('Period (s)')
+ylabel('dB (rel. 1 (m/s^2)^2/Hz)')
+
+
+%% Make a plot of the difference
+
+%NTK_Raw = NTK_Raw(2:end,:);
+
+%NTK_Decon = NTK_Decon(2:end,:);
+
+PSD_Diff = NTK_Decon(:,2) - Adam(:,2);
+
+
+figure(2);clf 
+semilogx(NTK_Decon(:,1),PSD_Diff, 'k.','linewidth',3);
+
+set(gca,'FontSize',30)
+xlim([0.05 1000])
+ylim([-10 5])
+set(gca,'ydir','normal')
+
+set(gca,'xtick',ticks)
+set(gca,'Xticklabel',HZ_label)
+set(gca,'xdir','reverse')
+
+xlabel('Frequency (Hz)')
+ylabel('PSD Difference (from Deconvolution Fiter only) (dB)')
